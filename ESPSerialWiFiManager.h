@@ -31,8 +31,15 @@ class ESPSerialWiFiManager {
         String _ssid = "";
         String _pass = "";
 
+        bool _wait_for_wifi(bool status);
         bool _wait_for_wifi();
+        bool _connect_noenc(String ssid){}
+        bool _connect_wep(String ssid){}
+        bool _connect_wpa(String ssid, String pass);
+        bool _connect_wpa(String ssid);
+        void _scan_for_networks();
 
+        int _print_menu(String * menu_list, int menu_size);
         String _prompt(String prompt);
         int _prompt_int(String prompt);
 };
