@@ -28,20 +28,75 @@ uint8_t ESPSerialWiFiManager::begin(){
     //     Serial.println("Unable to connect to WiFi!");
 }
 
+// WL_NO_SHIELD        = 255,   // for compatibility with WiFi Shield library
+// WL_IDLE_STATUS      = 0,
+// WL_NO_SSID_AVAIL    = 1,
+// WL_SCAN_COMPLETED   = 2,
+// WL_CONNECTED        = 3,
+// WL_CONNECT_FAILED   = 4,
+// WL_CONNECTION_LOST  = 5,
+// WL_DISCONNECTED     = 6
+
 bool ESPSerialWiFiManager::_wait_for_wifi(bool status){
     int c = 0;
     if(status) Serial.println("Connecting to " + _ssid);
-    while ( c < 20 ) {
-        if (WiFi.status() == WL_CONNECTED) { return true; }
+    while ((WiFi.status() == WL_IDLE_STATUS || WiFi.status() == WL_DISCONNECTED) && c < WIFI_WAIT_TIMEOUT) {
         delay(500);
         if(status) Serial.print(".");
         c++;
     }
+
+    OL("");
+    int ws = WiFi.status();
+    if (ws == WL_CONNECTED) {
+        OL("Connection Sucessful");
+        return true;
+    }
+    else if (status && ws == WL_CONNECT_FAILED){
+        OL("Failed Connecting to AP");
+    }
+    else{
+        OL("Timed Out Connecting to AP");
+    }
+    OL("");
     return false;
 }
 
 bool ESPSerialWiFiManager::_wait_for_wifi(){
     return _wait_for_wifi(false);
+}
+
+void ESPSerialWiFiManager::_disp_network_details(){
+    // print your WiFi shield's IP address:
+    IPAddress ip = WiFi.localIP();
+    O("IP Address: ");
+    OL(ip);
+
+    // print your MAC address:
+    byte mac[6];
+    WiFi.macAddress(mac);
+    O("MAC address: ");
+    Serial.print(mac[5],HEX);
+    Serial.print(":");
+    Serial.print(mac[4],HEX);
+    Serial.print(":");
+    Serial.print(mac[3],HEX);
+    Serial.print(":");
+    Serial.print(mac[2],HEX);
+    Serial.print(":");
+    Serial.print(mac[1],HEX);
+    Serial.print(":");
+    Serial.println(mac[0],HEX);
+
+    // print your subnet mask:
+    IPAddress subnet = WiFi.subnetMask();
+    O("NetMask: ");
+    OL(subnet);
+
+    // print your gateway address:
+    IPAddress gateway = WiFi.gatewayIP();
+    O("Gateway: ");
+    OL(gateway);
 }
 
 String ESPSerialWiFiManager::_prompt(String prompt){
@@ -59,10 +114,13 @@ String ESPSerialWiFiManager::_prompt(String prompt){
             tmp = Serial.read();
             if(tmp != '\n' && tmp != '\r'){
                 cmd[count] = tmp;
+                Serial.write(tmp);
+                Serial.flush();
                 count++;
             }
             else{
                 _flush_serial();
+                OL("");
                 return String(cmd);
             }
         }
@@ -86,7 +144,6 @@ int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size){
             O(i+1); O(": "); OL(menu_list[i]);
         }
         opt = _prompt_int("");
-        OL(opt);
 
         if(opt < 1 || opt >= menu_size)
             OL("Invalid Menu Option!");
@@ -95,19 +152,18 @@ int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size){
     }
 }
 
-bool ESPSerialWiFiManager::_connect_wpa(String ssid, String pass){
+bool ESPSerialWiFiManager::_connect_enc(String ssid, String pass){
     _ssid = ssid;
     WiFi.begin(ssid.c_str(), pass.c_str());
     return _wait_for_wifi(true);
 }
 
-bool ESPSerialWiFiManager::_connect_wpa(String ssid){
+bool ESPSerialWiFiManager::_connect_enc(String ssid){
     O("Connect to "); O(ssid); OL(":");
 
     String pass = _prompt("Password");
-    OL(pass);
 
-    return _connect_wpa(ssid, pass);
+    return _connect_enc(ssid, pass);
 }
 
 void ESPSerialWiFiManager::_scan_for_networks(){
@@ -135,28 +191,32 @@ void ESPSerialWiFiManager::_scan_for_networks(){
         OL("q: Quit Network Scan");
 
         opt_s  = _prompt("");
-        OL(opt_s);
 
         if(opt_s[0] == 'q' || opt_s[0] == 'Q'){ return; } //exit scan
+        else if(opt_s[0] == 's' || opt_s[0] == 'S'){ continue; }
         else{
             opt = opt_s.toInt();
             if(opt < 1 || opt >= n + 2)
                 OL("Invalid Menu Option!");
             else{
                     opt = opt - 1;
-                    switch (WiFi.encryptionType(opt - 1)) {
+                    switch (WiFi.encryptionType(opt)) {
                         case ENC_TYPE_WEP:
-                            Serial.println("WEP");
-                            break;
                         case ENC_TYPE_TKIP:
                         case ENC_TYPE_CCMP:
-                            _connect_wpa(WiFi.SSID(opt - 1));
+                        case ENC_TYPE_AUTO:
+                            if(_connect_enc(WiFi.SSID(opt))){
+                                _disp_network_details();
+                                return;
+                            }
+                            else{
+                                opt_s = _prompt("Scan Again? y/n");
+                                if(opt_s[0] == 'y' || opt_s[0] == 'Y'){ continue; }
+                                else{ return; }
+                            }
                             break;
                         case ENC_TYPE_NONE:
                             Serial.println("None");
-                            break;
-                        case ENC_TYPE_AUTO:
-                            _connect_wpa(WiFi.SSID(opt - 1));
                             break;
                   }
             }
@@ -199,6 +259,7 @@ void ESPSerialWiFiManager::run_menu(){
     OL("=======================");
 
     while(true){
+        OL("\nMain Menu");
         i = _print_menu(_main_menu, _main_menu_size);
         switch(i){
             case 1:
@@ -211,6 +272,4 @@ void ESPSerialWiFiManager::run_menu(){
         }
         delay(1);
     }
-    OL(_prompt("Enter choice"));
-
 }

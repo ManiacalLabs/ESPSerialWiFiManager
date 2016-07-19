@@ -10,6 +10,7 @@
 #define O(t) Serial.print(t)
 #define OL(t) Serial.println(t)
 #define PROMPT_INPUT_SIZE 256
+#define WIFI_WAIT_TIMEOUT 30 //seconds to wait for wifi connect
 
 class ESPSerialWiFiManager {
     public:
@@ -33,10 +34,10 @@ class ESPSerialWiFiManager {
 
         bool _wait_for_wifi(bool status);
         bool _wait_for_wifi();
+        void _disp_network_details();
         bool _connect_noenc(String ssid){}
-        bool _connect_wep(String ssid){}
-        bool _connect_wpa(String ssid, String pass);
-        bool _connect_wpa(String ssid);
+        bool _connect_enc(String ssid, String pass);
+        bool _connect_enc(String ssid);
         void _scan_for_networks();
 
         int _print_menu(String * menu_list, int menu_size);
