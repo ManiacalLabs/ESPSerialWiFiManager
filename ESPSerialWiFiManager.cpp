@@ -9,7 +9,7 @@ ESPSerialWiFiManager::ESPSerialWiFiManager(int eeprom_size, int eeprom_offset)
 { _eeprom_size = eeprom_size; _eeprom_offset = eeprom_offset; }
 
 void ESPSerialWiFiManager::set_init_ap(char const *ssid, char const *pass)
-{ _ssid = String(ssid); _pass = String(pass); }
+{ _set_config(String(ssid), String(pass), true); }
 
 void _flush_serial(){
     while(Serial.available() > 0){
@@ -18,14 +18,45 @@ void _flush_serial(){
 }
 
 uint8_t ESPSerialWiFiManager::begin(){
+    EEPROM.begin(_eeprom_size);
+    _read_config();
+
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
     delay(100);
-    // WiFi.begin(_ssid.c_str(), _pass.c_str());
-    // if(_wait_for_wifi())
-    //     Serial.println("WiFi Connected!");
-    // else
-    //     Serial.println("Unable to connect to WiFi!");
+
+    if(_network_config.config){
+        _connect_from_config();
+    }
+}
+
+void ESPSerialWiFiManager::_write_config(){
+    EEPROM_writeAnything(_eeprom_offset + 1, _network_config);
+}
+
+void ESPSerialWiFiManager::_read_config(){
+    if(EEPROM.read(_eeprom_offset) != CONFIGCHECK)
+    {
+        OL("Bad CONFIGCHECK");
+        memset(_network_config.ssid, 0, sizeof(char) * SSID_MAX);
+        memset(_network_config.password, 0, sizeof(char) * PASS_MAX);
+        _network_config.encrypted = false;
+        _write_config();
+        EEPROM.write(_eeprom_offset, CONFIGCHECK);
+    }
+
+    EEPROM_readAnything(_eeprom_offset + 1, _network_config);
+}
+
+void ESPSerialWiFiManager::_set_config(String ssid, String pass, bool enc){
+    memset(_network_config.ssid, 0, sizeof(char) * SSID_MAX);
+    memset(_network_config.password, 0, sizeof(char) * PASS_MAX);
+
+    memcpy(_network_config.ssid, ssid.c_str(), sizeof(char) * ssid.length());
+    memcpy(_network_config.password, pass.c_str(), sizeof(char) * pass.length());
+    _network_config.encrypted = enc;
+
+    _network_config.config = true;
 }
 
 // WL_NO_SHIELD        = 255,   // for compatibility with WiFi Shield library
@@ -39,7 +70,7 @@ uint8_t ESPSerialWiFiManager::begin(){
 
 bool ESPSerialWiFiManager::_wait_for_wifi(bool status){
     int c = 0;
-    if(status) Serial.println("Connecting to " + _ssid);
+    if(status) Serial.println("Connecting to " + WiFi.SSID());
     while ((WiFi.status() == WL_IDLE_STATUS || WiFi.status() == WL_DISCONNECTED) && c < WIFI_WAIT_TIMEOUT) {
         delay(500);
         if(status) Serial.print(".");
@@ -152,10 +183,30 @@ int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size){
     }
 }
 
+bool ESPSerialWiFiManager::_connect_from_config(){
+    if(_network_config.encrypted){
+        WiFi.begin(_network_config.ssid, _network_config.password);
+    }
+    else{
+        WiFi.begin(_network_config.ssid);
+    }
+
+    bool res = _wait_for_wifi(true);
+    if(res) _disp_network_details();
+    return res;
+}
+
 bool ESPSerialWiFiManager::_connect_enc(String ssid, String pass){
-    _ssid = ssid;
     WiFi.begin(ssid.c_str(), pass.c_str());
-    return _wait_for_wifi(true);
+    if(_wait_for_wifi(true)){
+        OL("Saving config...");
+        _set_config(ssid, pass, true);
+        _write_config();
+        return true;
+    }
+    else{
+        return false;
+    }
 }
 
 bool ESPSerialWiFiManager::_connect_enc(String ssid){
@@ -246,11 +297,12 @@ void ESPSerialWiFiManager::_scan_for_networks(){
 // }
 
 void ESPSerialWiFiManager::run_menu(){
-    static const uint8_t _main_menu_size = 3;
+    static const uint8_t _main_menu_size = 4;
     static String _main_menu[_main_menu_size] = {
         "Scan",
         "Manual Config",
-        "WPS Connect"
+        "WPS Connect",
+        "Quit"
     };
 
     static int i;
@@ -269,6 +321,8 @@ void ESPSerialWiFiManager::run_menu(){
                 break;
             case 3:
                 break;
+            case 4: //Quit
+                return;
         }
         delay(1);
     }
