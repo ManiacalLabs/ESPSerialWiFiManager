@@ -8,7 +8,7 @@ void setup(){
 
     eswp.set_init_ap("SSID", "Password");
     eswp.begin();
-    eswp.run_menu();
+    eswp.run_menu(10);
 }
 
 void loop(){

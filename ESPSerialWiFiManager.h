@@ -22,7 +22,6 @@ template <class T> int EEPROM_writeAnything(int ee, const T& value)
 	unsigned int i;
 	for (i = 0; i < sizeof(value); i++)
 		EEPROM.write(ee++, *p++);
-    EEPROM.commit();
 	return i;
 }
 
@@ -54,6 +53,7 @@ class ESPSerialWiFiManager {
 
         void set_init_ap(char const *ssid, char const *password);
 
+        void run_menu(int timeout);
         void run_menu();
 
     private:
@@ -67,6 +67,7 @@ class ESPSerialWiFiManager {
         void _read_config();
 
         void _set_config(String ssid, String pass, bool enc);
+        void _reset_config();
 
         bool _wait_for_wifi(bool status);
         bool _wait_for_wifi();

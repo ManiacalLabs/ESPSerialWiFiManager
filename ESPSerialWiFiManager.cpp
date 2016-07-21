@@ -48,9 +48,15 @@ void ESPSerialWiFiManager::_read_config(){
     EEPROM_readAnything(_eeprom_offset + 1, _network_config);
 }
 
-void ESPSerialWiFiManager::_set_config(String ssid, String pass, bool enc){
+void ESPSerialWiFiManager::_reset_config(){
     memset(_network_config.ssid, 0, sizeof(char) * SSID_MAX);
     memset(_network_config.password, 0, sizeof(char) * PASS_MAX);
+    _network_config.encrypted = false;
+    _network_config.config = false;
+}
+
+void ESPSerialWiFiManager::_set_config(String ssid, String pass, bool enc){
+    _reset_config();
 
     memcpy(_network_config.ssid, ssid.c_str(), sizeof(char) * ssid.length());
     memcpy(_network_config.password, pass.c_str(), sizeof(char) * pass.length());
@@ -99,17 +105,16 @@ bool ESPSerialWiFiManager::_wait_for_wifi(){
 
 void ESPSerialWiFiManager::_disconnect(){
     if(WiFi.status() == WL_CONNECTED){
-        OL("Disconnecting from " + WiFi.SSID());
+        OL("Disconnecting from " + WiFi.SSID() + "...");
         WiFi.disconnect();
         while(WiFi.status() == WL_CONNECTED){
-            O(".");
             delay(100);
         }
-        OL("");
     }
 }
 
 void ESPSerialWiFiManager::_disp_network_details(){
+    OL("Current Network Details:");
     OL("SSID: " + WiFi.SSID());
 
     IPAddress ip = WiFi.localIP();
@@ -149,7 +154,9 @@ String ESPSerialWiFiManager::_prompt(String prompt, char mask, int timeout){
     static char tmp;
     memset(cmd, 0, PROMPT_INPUT_SIZE);
     count = 0;
-    O("Timeout Is: "); OL(timeout);
+    if(timeout > 0){
+        O("\nTimeout in "); O(timeout); OL("s...");
+    }
 
     int start = millis();
 
@@ -207,7 +214,7 @@ int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size, int tim
         }
         opt = _prompt_int("", timeout);
 
-        if(timeout == 0 && (opt < 1 || opt >= menu_size))
+        if(timeout == 0 && (opt < 1 || opt > menu_size))
             OL("Invalid Menu Option!");
         else
             return opt;
@@ -239,9 +246,9 @@ bool ESPSerialWiFiManager::_connect(String ssid, String pass){
     else
         WiFi.begin(ssid.c_str());
     if(_wait_for_wifi(true)){
-        OL("Saving config...");
         _set_config(ssid, pass, true);
         _write_config();
+        OL("Choose commit config for changes to persist reboot.\n");
         return true;
     }
     else{
@@ -351,13 +358,16 @@ void ESPSerialWiFiManager::_scan_for_networks(){
 //   }
 // }
 
-void ESPSerialWiFiManager::run_menu(){
+void ESPSerialWiFiManager::run_menu(){ return run_menu(0); }
+void ESPSerialWiFiManager::run_menu(int timeout){
     bool first_run = true;
-    static const uint8_t _main_menu_size = 4;
+    static const uint8_t _main_menu_size = 6;
     static String _main_menu[_main_menu_size] = {
         F("Scan"),
         F("Manual Connect"),
         F("WPS Connect"),
+        F("Disconnect"),
+        F("Commit Config"),
         F("Quit")
         //"Disconnect"
     };
@@ -369,7 +379,7 @@ void ESPSerialWiFiManager::run_menu(){
 
     while(true){
         OL("\nMain Menu");
-        i = _print_menu(_main_menu, _main_menu_size, first_run ? 3 : 0);
+        i = _print_menu(_main_menu, _main_menu_size, first_run ? timeout : 0);
         if(i == -1) return; //timeout ocurred, exit
         first_run = false;
         switch(i){
@@ -380,9 +390,25 @@ void ESPSerialWiFiManager::run_menu(){
                 if(_connect_manual())
                     _disp_network_details();
                 break;
-            case 3:
+            case 3: //WPS Connect
                 break;
-            case 4: //Quit
+            case 4:
+                if(WiFi.status() == WL_CONNECTED){
+                    _disconnect();
+                    OL("Complete");
+                }
+                else{
+                    OL("Not currently connected...");
+                }
+                _reset_config();
+                _write_config();
+                break;
+            case 5:
+                OL("Commiting config to EEPROM... ");
+                EEPROM.commit();
+                OL("Complete. Changes will now persist through reboot.");
+                break;
+            case 6: //quit, nothing to do, just exit
                 return;
         }
         delay(1);
