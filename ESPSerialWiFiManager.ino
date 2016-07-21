@@ -6,12 +6,13 @@ ESPSerialWiFiManager eswp = ESPSerialWiFiManager();
 void setup(){
     Serial.begin(115200);
 
-    // eswp.set_init_ap("SSID", "Password");
+    eswp.set_init_ap("SSID", "Password");
     eswp.begin();
+    eswp.run_menu();
 }
 
 void loop(){
-    eswp.run_menu();
+
     Serial.println("Loop...");
     delay(1000);
 }

@@ -12,6 +12,7 @@
 
 #define O(t) Serial.print(t)
 #define OL(t) Serial.println(t)
+#define CHAROPT(opt, val) bool(opt == val || (opt+32) == val)
 #define PROMPT_INPUT_SIZE 256
 #define WIFI_WAIT_TIMEOUT 30 //seconds to wait for wifi connect
 
@@ -70,14 +71,20 @@ class ESPSerialWiFiManager {
         bool _wait_for_wifi(bool status);
         bool _wait_for_wifi();
         void _disp_network_details();
+        void _disconnect();
         bool _connect_from_config();
-        bool _connect_noenc(String ssid){}
-        bool _connect_enc(String ssid, String pass);
+        bool _connect(String ssid, String pass);
+        bool _connect_noenc(String ssid);
         bool _connect_enc(String ssid);
+        bool _connect_manual();
         void _scan_for_networks();
 
+        int _print_menu(String * menu_list, int menu_size, int timeout);
         int _print_menu(String * menu_list, int menu_size);
+        String _prompt(String prompt, char mask, int timeout);
+        String _prompt(String prompt, char mask);
         String _prompt(String prompt);
+        int _prompt_int(String prompt, int timeout);
         int _prompt_int(String prompt);
 };
 

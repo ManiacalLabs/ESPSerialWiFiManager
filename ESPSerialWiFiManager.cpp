@@ -97,8 +97,21 @@ bool ESPSerialWiFiManager::_wait_for_wifi(){
     return _wait_for_wifi(false);
 }
 
+void ESPSerialWiFiManager::_disconnect(){
+    if(WiFi.status() == WL_CONNECTED){
+        OL("Disconnecting from " + WiFi.SSID());
+        WiFi.disconnect();
+        while(WiFi.status() == WL_CONNECTED){
+            O(".");
+            delay(100);
+        }
+        OL("");
+    }
+}
+
 void ESPSerialWiFiManager::_disp_network_details(){
-    // print your WiFi shield's IP address:
+    OL("SSID: " + WiFi.SSID());
+
     IPAddress ip = WiFi.localIP();
     O("IP Address: ");
     OL(ip);
@@ -130,12 +143,15 @@ void ESPSerialWiFiManager::_disp_network_details(){
     OL(gateway);
 }
 
-String ESPSerialWiFiManager::_prompt(String prompt){
+String ESPSerialWiFiManager::_prompt(String prompt, char mask, int timeout){
     static char cmd[PROMPT_INPUT_SIZE];
     static int count;
     static char tmp;
     memset(cmd, 0, PROMPT_INPUT_SIZE);
     count = 0;
+    O("Timeout Is: "); OL(timeout);
+
+    int start = millis();
 
     O(prompt.c_str());
     O("> ");
@@ -145,7 +161,10 @@ String ESPSerialWiFiManager::_prompt(String prompt){
             tmp = Serial.read();
             if(tmp != '\n' && tmp != '\r'){
                 cmd[count] = tmp;
-                Serial.write(tmp);
+                if(mask==' ')
+                    Serial.write(tmp);
+                else
+                    Serial.write(mask);
                 Serial.flush();
                 count++;
             }
@@ -156,11 +175,20 @@ String ESPSerialWiFiManager::_prompt(String prompt){
             }
         }
         delay(1);
+        if(timeout > 0 && (millis()-start) > (timeout * 1000)){
+            return "-1";
+        }
     }
 }
 
+String ESPSerialWiFiManager::_prompt(String prompt, char mask) { return _prompt(prompt, mask, 0); }
+String ESPSerialWiFiManager::_prompt(String prompt) { return _prompt(prompt, ' ', 0); }
+
 int ESPSerialWiFiManager::_prompt_int(String prompt){
-    String res = _prompt(prompt);
+    return _prompt_int(prompt, 0);
+}
+int ESPSerialWiFiManager::_prompt_int(String prompt, int timeout){
+    String res = _prompt(prompt, ' ', timeout);
     int res_i = res.toInt();
     // if(res_i == 0 && res[0] != 0)
     //     res_i = NULL;
@@ -169,14 +197,17 @@ int ESPSerialWiFiManager::_prompt_int(String prompt){
 }
 
 int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size){
+    return _print_menu(menu_list, menu_size);
+}
+int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size, int timeout){
     int i, opt;
     while(true){
         for(i=0; i<menu_size; i++){
             O(i+1); O(": "); OL(menu_list[i]);
         }
-        opt = _prompt_int("");
+        opt = _prompt_int("", timeout);
 
-        if(opt < 1 || opt >= menu_size)
+        if(timeout == 0 && (opt < 1 || opt >= menu_size))
             OL("Invalid Menu Option!");
         else
             return opt;
@@ -184,6 +215,7 @@ int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size){
 }
 
 bool ESPSerialWiFiManager::_connect_from_config(){
+    _disconnect();
     if(_network_config.encrypted){
         WiFi.begin(_network_config.ssid, _network_config.password);
     }
@@ -196,8 +228,16 @@ bool ESPSerialWiFiManager::_connect_from_config(){
     return res;
 }
 
-bool ESPSerialWiFiManager::_connect_enc(String ssid, String pass){
-    WiFi.begin(ssid.c_str(), pass.c_str());
+bool ESPSerialWiFiManager::_connect_noenc(String ssid){
+    return _connect(ssid, "");
+}
+
+bool ESPSerialWiFiManager::_connect(String ssid, String pass){
+    _disconnect();
+    if(pass.length() > 0)
+        WiFi.begin(ssid.c_str(), pass.c_str());
+    else
+        WiFi.begin(ssid.c_str());
     if(_wait_for_wifi(true)){
         OL("Saving config...");
         _set_config(ssid, pass, true);
@@ -212,9 +252,22 @@ bool ESPSerialWiFiManager::_connect_enc(String ssid, String pass){
 bool ESPSerialWiFiManager::_connect_enc(String ssid){
     O("Connect to "); O(ssid); OL(":");
 
-    String pass = _prompt("Password");
+    String pass = _prompt("Password", '*');
 
-    return _connect_enc(ssid, pass);
+    return _connect(ssid, pass);
+}
+
+bool ESPSerialWiFiManager::_connect_manual(){
+    OL("Manual WiFi Config:");
+    String ssid = _prompt("Enter SSID (Case Sensitive)");
+    String enc = _prompt("Encrypted Network? y/n");
+    String pass = "";
+    if(CHAROPT(enc[0],'y')){
+        pass = _prompt("Password", '*');
+    }
+
+    _disconnect();
+    return _connect(ssid, pass);
 }
 
 void ESPSerialWiFiManager::_scan_for_networks(){
@@ -243,8 +296,8 @@ void ESPSerialWiFiManager::_scan_for_networks(){
 
         opt_s  = _prompt("");
 
-        if(opt_s[0] == 'q' || opt_s[0] == 'Q'){ return; } //exit scan
-        else if(opt_s[0] == 's' || opt_s[0] == 'S'){ continue; }
+        if(CHAROPT(opt_s[0], 'q')){ return; } //exit scan
+        else if(CHAROPT(opt_s[0], 's')){ continue; }
         else{
             opt = opt_s.toInt();
             if(opt < 1 || opt >= n + 2)
@@ -260,15 +313,17 @@ void ESPSerialWiFiManager::_scan_for_networks(){
                                 _disp_network_details();
                                 return;
                             }
-                            else{
-                                opt_s = _prompt("Scan Again? y/n");
-                                if(opt_s[0] == 'y' || opt_s[0] == 'Y'){ continue; }
-                                else{ return; }
-                            }
                             break;
                         case ENC_TYPE_NONE:
-                            Serial.println("None");
+                            if(_connect_noenc(WiFi.SSID(opt))){
+                                _disp_network_details();
+                                return;
+                            }
                             break;
+
+                    opt_s = _prompt("Scan Again? y/n");
+                    if(CHAROPT(opt_s[0], 'y')){ continue; }
+                    else{ return; }
                   }
             }
         }
@@ -297,12 +352,14 @@ void ESPSerialWiFiManager::_scan_for_networks(){
 // }
 
 void ESPSerialWiFiManager::run_menu(){
+    bool first_run = true;
     static const uint8_t _main_menu_size = 4;
     static String _main_menu[_main_menu_size] = {
-        "Scan",
-        "Manual Config",
-        "WPS Connect",
-        "Quit"
+        F("Scan"),
+        F("Manual Connect"),
+        F("WPS Connect"),
+        F("Quit")
+        //"Disconnect"
     };
 
     static int i;
@@ -312,12 +369,16 @@ void ESPSerialWiFiManager::run_menu(){
 
     while(true){
         OL("\nMain Menu");
-        i = _print_menu(_main_menu, _main_menu_size);
+        i = _print_menu(_main_menu, _main_menu_size, first_run ? 3 : 0);
+        if(i == -1) return; //timeout ocurred, exit
+        first_run = false;
         switch(i){
             case 1:
                 _scan_for_networks();
                 break;
             case 2:
+                if(_connect_manual())
+                    _disp_network_details();
                 break;
             case 3:
                 break;
