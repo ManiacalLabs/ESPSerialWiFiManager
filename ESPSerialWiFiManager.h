@@ -67,6 +67,7 @@ class ESPSerialWiFiManager {
         void _read_config();
 
         void _set_config(String ssid, String pass, bool enc);
+        void _save_config(String ssid, String pass, bool enc);
         void _reset_config();
 
         bool _wait_for_wifi(bool status);
@@ -78,6 +79,7 @@ class ESPSerialWiFiManager {
         bool _connect_noenc(String ssid);
         bool _connect_enc(String ssid);
         bool _connect_manual();
+        bool _connect_wps();
         void _scan_for_networks();
 
         int _print_menu(String * menu_list, int menu_size, int timeout);

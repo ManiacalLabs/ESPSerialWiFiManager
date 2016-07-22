@@ -65,6 +65,12 @@ void ESPSerialWiFiManager::_set_config(String ssid, String pass, bool enc){
     _network_config.config = true;
 }
 
+void ESPSerialWiFiManager::_save_config(String ssid, String pass, bool enc){
+    _set_config(ssid, pass, true);
+    _write_config();
+    OL("Choose commit config for changes to persist reboot.\n");
+}
+
 // WL_NO_SHIELD        = 255,   // for compatibility with WiFi Shield library
 // WL_IDLE_STATUS      = 0,
 // WL_NO_SSID_AVAIL    = 1,
@@ -246,9 +252,7 @@ bool ESPSerialWiFiManager::_connect(String ssid, String pass){
     else
         WiFi.begin(ssid.c_str());
     if(_wait_for_wifi(true)){
-        _set_config(ssid, pass, true);
-        _write_config();
-        OL("Choose commit config for changes to persist reboot.\n");
+        _save_config(ssid, pass, pass.length() > 0);
         return true;
     }
     else{
@@ -275,6 +279,25 @@ bool ESPSerialWiFiManager::_connect_manual(){
 
     _disconnect();
     return _connect(ssid, pass);
+}
+
+bool ESPSerialWiFiManager::_connect_wps(){
+    _disconnect();
+    OL("Push the WPS button on your access point now.");
+    _prompt("Press Enter when complete");
+    OL("Attempting WPS connection. May take some time...");
+    if(WiFi.beginWPSConfig()){
+        String ssid = WiFi.SSID();
+        if(ssid.length() > 0){
+            OL("\nSuccess! Connected to network " + ssid);
+
+            _save_config(ssid, WiFi.psk(), true);
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
 }
 
 void ESPSerialWiFiManager::_scan_for_networks(){
@@ -391,6 +414,7 @@ void ESPSerialWiFiManager::run_menu(int timeout){
                     _disp_network_details();
                 break;
             case 3: //WPS Connect
+                _connect_wps();
                 break;
             case 4:
                 if(WiFi.status() == WL_CONNECTED){
