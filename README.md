@@ -8,8 +8,8 @@ The [ESP8266 Arduino](https://github.com/esp8266/Arduino) package provides a gre
 
 The constructor can typically be called with no parameters but because EEPROM works a little differently on the ESP8266, two optional parameters are provided.
 
-- **eeprom_size**: Size in bytes of the desired EEPROM. Typically between 512 and 4096. The ESP8266 does not actually have an EEPROM and instead it's faked by writing to flash. Only use this if you are already using EEPROM in your code and need to specify something other than the default 512 bytes.
-- **eeprom_offset**: Offset in bytes at which the ESPSerialWiFiManager config should be stored. If, for example, your code uses 100 bytes of EEPROM, starting at byte index 0, set this offset to something greater than 100 so that ESPSerialWiFiManager does not overwrite your code's EEPROM data.
+- **eeprom_size**: (optional) Size in bytes of the desired EEPROM. Typically between 512 and 4096. The ESP8266 does not actually have an EEPROM and instead it's faked by writing to flash. Only use this if you are already using EEPROM in your code and need to specify something other than the default 512 bytes.
+- **eeprom_offset**: (optional) Offset in bytes at which the ESPSerialWiFiManager config should be stored. If, for example, your code uses 100 bytes of EEPROM, starting at byte index 0, set this offset to something greater than 100 so that ESPSerialWiFiManager does not overwrite your code's EEPROM data.
 
 *If you are using EEPROM in your code, you must remove the call to EEPROM.begin() and instead let ESPSerialWiFiManager handle it for you!*
 
@@ -26,4 +26,4 @@ The optional parameters are useful for providing a default that can then be chan
 
 Launches the interactive serial console. This can be called anywhere in the code. For example, call at the end of setup() with a timeout to provide a one-time option to configure the WiFi on boot. Or call it inside loop() when a button is pressed. See the [examples](https://github.com/ManiacalLabs/ESPSerialWiFiManager/tree/master/examples) for more.
 
-- **timeout**: If provided, the interactive console will timeout after this many seconds and return control to the main program.
+- **timeout**: (optional) If provided, the interactive console will timeout after this many seconds and return control to the main program.
