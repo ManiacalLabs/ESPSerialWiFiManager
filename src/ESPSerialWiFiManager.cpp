@@ -1,5 +1,12 @@
 #include "ESPSerialWiFiManager.h"
 
+//helper to ensure serial read line is cleared
+void _flush_serial(){
+    while(Serial.available() > 0){
+        Serial.read();
+    }
+}
+
 ESPSerialWiFiManager::ESPSerialWiFiManager() {}
 
 ESPSerialWiFiManager::ESPSerialWiFiManager(int eeprom_size)
@@ -8,14 +15,6 @@ ESPSerialWiFiManager::ESPSerialWiFiManager(int eeprom_size)
 ESPSerialWiFiManager::ESPSerialWiFiManager(int eeprom_size, int eeprom_offset)
 { _eeprom_size = eeprom_size; _eeprom_offset = eeprom_offset; }
 
-void ESPSerialWiFiManager::set_init_ap(char const *ssid, char const *pass)
-{ _set_config(String(ssid), String(pass), true); }
-
-void _flush_serial(){
-    while(Serial.available() > 0){
-        Serial.read();
-    }
-}
 
 uint8_t ESPSerialWiFiManager::begin(){
     EEPROM.begin(_eeprom_size);
@@ -28,10 +27,23 @@ uint8_t ESPSerialWiFiManager::begin(){
     if(_network_config.config){
         _connect_from_config();
     }
+
+    return WiFi.status();
 }
 
+uint8_t ESPSerialWiFiManager::begin(String ssid, String pass){
+    _set_config(ssid, pass, pass.length() > 0);
+    return begin();
+}
+
+uint8_t ESPSerialWiFiManager::begin(String ssid){
+    return begin(ssid, "");
+}
+
+uint8_t ESPSerialWiFiManager::status(){ return WiFi.status(); }
+
 void ESPSerialWiFiManager::_write_config(){
-    EEPROM_writeAnything(_eeprom_offset + 1, _network_config);
+    EWA(_eeprom_offset + 1, _network_config);
 }
 
 void ESPSerialWiFiManager::_read_config(){
@@ -45,7 +57,7 @@ void ESPSerialWiFiManager::_read_config(){
         EEPROM.write(_eeprom_offset, CONFIGCHECK);
     }
 
-    EEPROM_readAnything(_eeprom_offset + 1, _network_config);
+    ERA(_eeprom_offset + 1, _network_config);
 }
 
 void ESPSerialWiFiManager::_reset_config(){
@@ -71,14 +83,139 @@ void ESPSerialWiFiManager::_save_config(String ssid, String pass, bool enc){
     OL("Choose commit config for changes to persist reboot.\n");
 }
 
-// WL_NO_SHIELD        = 255,   // for compatibility with WiFi Shield library
-// WL_IDLE_STATUS      = 0,
-// WL_NO_SSID_AVAIL    = 1,
-// WL_SCAN_COMPLETED   = 2,
-// WL_CONNECTED        = 3,
-// WL_CONNECT_FAILED   = 4,
-// WL_CONNECTION_LOST  = 5,
-// WL_DISCONNECTED     = 6
+
+bool ESPSerialWiFiManager::_connect_from_config(){
+    _disconnect();
+    if(_network_config.encrypted){
+        WiFi.begin(_network_config.ssid, _network_config.password);
+    }
+    else{
+        WiFi.begin(_network_config.ssid);
+    }
+
+    bool res = _wait_for_wifi(true);
+    if(res) _disp_network_details();
+    return res;
+}
+
+bool ESPSerialWiFiManager::_connect_noenc(String ssid){
+    return _connect(ssid, "");
+}
+
+bool ESPSerialWiFiManager::_connect(String ssid, String pass){
+    _disconnect();
+    if(pass.length() > 0)
+        WiFi.begin(ssid.c_str(), pass.c_str());
+    else
+        WiFi.begin(ssid.c_str());
+    if(_wait_for_wifi(true)){
+        _save_config(ssid, pass, pass.length() > 0);
+        return true;
+    }
+    else{
+        return false;
+    }
+}
+
+bool ESPSerialWiFiManager::_connect_enc(String ssid){
+    O("Connect to "); O(ssid); OL(":");
+
+    String pass = _prompt("Password", '*');
+
+    return _connect(ssid, pass);
+}
+
+bool ESPSerialWiFiManager::_connect_manual(){
+    OL("Manual WiFi Config:");
+    String ssid = _prompt("Enter SSID (Case Sensitive)");
+    String enc = _prompt("Encrypted Network? y/n");
+    String pass = "";
+    if(CHAROPT(enc[0],'y')){
+        pass = _prompt("Password", '*');
+    }
+
+    _disconnect();
+    return _connect(ssid, pass);
+}
+
+bool ESPSerialWiFiManager::_connect_wps(){
+    _disconnect();
+    OL("Push the WPS button on your access point now.");
+    _prompt("Press Enter when complete");
+    OL("Attempting WPS connection. May take some time...");
+    if(WiFi.beginWPSConfig()){
+        String ssid = WiFi.SSID();
+        if(ssid.length() > 0){
+            OL("\nSuccess! Connected to network " + ssid);
+
+            _save_config(ssid, WiFi.psk(), true);
+            return true;
+        }
+        else{
+            return false;
+        }
+    }
+}
+
+void ESPSerialWiFiManager::_scan_for_networks(){
+    int i, opt;
+    String opt_s;
+
+    while(true){
+        OL("Starting network scan...");
+        int n = WiFi.scanNetworks();
+
+        if(n == 0){
+            OL("\nNo Avaliable Networks!\nChoose Option Below.");
+        }
+        else{
+            O(n); OL(" networks found:");
+            for(i=0; i < n; i++){
+                O(i + 1);O(": ");O(WiFi.SSID(i));
+                O(" (");O(WiFi.RSSI(i));O(")");
+                OL((WiFi.encryptionType(i) == ENC_TYPE_NONE)?"":"*");
+            }
+        }
+
+        OL("");
+        OL("s: Scan Again");
+        OL("q: Quit Network Scan");
+
+        opt_s  = _prompt("");
+
+        if(CHAROPT(opt_s[0], 'q')){ return; } //exit scan
+        else if(CHAROPT(opt_s[0], 's')){ continue; }
+        else{
+            opt = opt_s.toInt();
+            if(opt < 1 || opt >= n + 2)
+                OL("Invalid Menu Option!");
+            else{
+                    opt = opt - 1;
+                    switch (WiFi.encryptionType(opt)) {
+                        case ENC_TYPE_WEP:
+                        case ENC_TYPE_TKIP:
+                        case ENC_TYPE_CCMP:
+                        case ENC_TYPE_AUTO:
+                            if(_connect_enc(WiFi.SSID(opt))){
+                                _disp_network_details();
+                                return;
+                            }
+                            break;
+                        case ENC_TYPE_NONE:
+                            if(_connect_noenc(WiFi.SSID(opt))){
+                                _disp_network_details();
+                                return;
+                            }
+                            break;
+
+                    opt_s = _prompt("Scan Again? y/n");
+                    if(CHAROPT(opt_s[0], 'y')){ continue; }
+                    else{ return; }
+                  }
+            }
+        }
+    }
+}
 
 bool ESPSerialWiFiManager::_wait_for_wifi(bool status){
     int c = 0;
@@ -226,160 +363,6 @@ int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size, int tim
             return opt;
     }
 }
-
-bool ESPSerialWiFiManager::_connect_from_config(){
-    _disconnect();
-    if(_network_config.encrypted){
-        WiFi.begin(_network_config.ssid, _network_config.password);
-    }
-    else{
-        WiFi.begin(_network_config.ssid);
-    }
-
-    bool res = _wait_for_wifi(true);
-    if(res) _disp_network_details();
-    return res;
-}
-
-bool ESPSerialWiFiManager::_connect_noenc(String ssid){
-    return _connect(ssid, "");
-}
-
-bool ESPSerialWiFiManager::_connect(String ssid, String pass){
-    _disconnect();
-    if(pass.length() > 0)
-        WiFi.begin(ssid.c_str(), pass.c_str());
-    else
-        WiFi.begin(ssid.c_str());
-    if(_wait_for_wifi(true)){
-        _save_config(ssid, pass, pass.length() > 0);
-        return true;
-    }
-    else{
-        return false;
-    }
-}
-
-bool ESPSerialWiFiManager::_connect_enc(String ssid){
-    O("Connect to "); O(ssid); OL(":");
-
-    String pass = _prompt("Password", '*');
-
-    return _connect(ssid, pass);
-}
-
-bool ESPSerialWiFiManager::_connect_manual(){
-    OL("Manual WiFi Config:");
-    String ssid = _prompt("Enter SSID (Case Sensitive)");
-    String enc = _prompt("Encrypted Network? y/n");
-    String pass = "";
-    if(CHAROPT(enc[0],'y')){
-        pass = _prompt("Password", '*');
-    }
-
-    _disconnect();
-    return _connect(ssid, pass);
-}
-
-bool ESPSerialWiFiManager::_connect_wps(){
-    _disconnect();
-    OL("Push the WPS button on your access point now.");
-    _prompt("Press Enter when complete");
-    OL("Attempting WPS connection. May take some time...");
-    if(WiFi.beginWPSConfig()){
-        String ssid = WiFi.SSID();
-        if(ssid.length() > 0){
-            OL("\nSuccess! Connected to network " + ssid);
-
-            _save_config(ssid, WiFi.psk(), true);
-            return true;
-        }
-        else{
-            return false;
-        }
-    }
-}
-
-void ESPSerialWiFiManager::_scan_for_networks(){
-    int i, opt;
-    String opt_s;
-
-    while(true){
-        OL("Starting network scan...");
-        int n = WiFi.scanNetworks();
-
-        if(n == 0){
-            OL("\nNo Avaliable Networks!\nChoose Option Below.");
-        }
-        else{
-            O(n); OL(" networks found:");
-            for(i=0; i < n; i++){
-                O(i + 1);O(": ");O(WiFi.SSID(i));
-                O(" (");O(WiFi.RSSI(i));O(")");
-                OL((WiFi.encryptionType(i) == ENC_TYPE_NONE)?"":"*");
-            }
-        }
-
-        OL("");
-        OL("s: Scan Again");
-        OL("q: Quit Network Scan");
-
-        opt_s  = _prompt("");
-
-        if(CHAROPT(opt_s[0], 'q')){ return; } //exit scan
-        else if(CHAROPT(opt_s[0], 's')){ continue; }
-        else{
-            opt = opt_s.toInt();
-            if(opt < 1 || opt >= n + 2)
-                OL("Invalid Menu Option!");
-            else{
-                    opt = opt - 1;
-                    switch (WiFi.encryptionType(opt)) {
-                        case ENC_TYPE_WEP:
-                        case ENC_TYPE_TKIP:
-                        case ENC_TYPE_CCMP:
-                        case ENC_TYPE_AUTO:
-                            if(_connect_enc(WiFi.SSID(opt))){
-                                _disp_network_details();
-                                return;
-                            }
-                            break;
-                        case ENC_TYPE_NONE:
-                            if(_connect_noenc(WiFi.SSID(opt))){
-                                _disp_network_details();
-                                return;
-                            }
-                            break;
-
-                    opt_s = _prompt("Scan Again? y/n");
-                    if(CHAROPT(opt_s[0], 'y')){ continue; }
-                    else{ return; }
-                  }
-            }
-        }
-    }
-}
-
-// void printEncryptionType(int thisType) {
-//   // read the encryption type and print out the name:
-//   switch (thisType) {
-//     case ENC_TYPE_WEP:
-//       Serial.println("WEP");
-//       break;
-//     case ENC_TYPE_TKIP:
-//       Serial.println("WPA");
-//       break;
-//     case ENC_TYPE_CCMP:
-//       Serial.println("WPA2");
-//       break;
-//     case ENC_TYPE_NONE:
-//       Serial.println("None");
-//       break;
-//     case ENC_TYPE_AUTO:
-//       Serial.println("Auto");
-//       break;
-//   }
-// }
 
 void ESPSerialWiFiManager::run_menu(){ return run_menu(0); }
 void ESPSerialWiFiManager::run_menu(int timeout){

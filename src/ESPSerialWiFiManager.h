@@ -10,13 +10,16 @@
 #define SSID_MAX 32
 #define PASS_MAX 64
 
+//These save typing 11-12 characters each time
 #define O(t) Serial.print(t)
 #define OL(t) Serial.println(t)
-#define CHAROPT(opt, val) bool(opt == val || (opt+32) == val)
-#define PROMPT_INPUT_SIZE 256
+
+#define CHAROPT(opt, val) bool(opt == val || (opt+32) == val) //quick checking of single char case-insensitive
+#define PROMPT_INPUT_SIZE PASS_MAX //Max WPA Password size is 64, so this is good enough
 #define WIFI_WAIT_TIMEOUT 30 //seconds to wait for wifi connect
 
-template <class T> int EEPROM_writeAnything(int ee, const T& value)
+// Allows writing/reading of config structures direct to EEPROM
+template <class T> int EWA(int ee, const T& value)
 {
 	const byte* p = (const byte*)(const void*)&value;
 	unsigned int i;
@@ -25,7 +28,7 @@ template <class T> int EEPROM_writeAnything(int ee, const T& value)
 	return i;
 }
 
-template <class T> int EEPROM_readAnything(int ee, T& value)
+template <class T> int ERA(int ee, T& value)
 {
 	byte* p = (byte*)(void*)&value;
 	unsigned int i;
@@ -34,6 +37,7 @@ template <class T> int EEPROM_readAnything(int ee, T& value)
 	return i;
 }
 
+//main config object
 typedef struct __attribute__((__packed__))
 {
     bool config; //true if config is confirmed and saved
@@ -41,7 +45,7 @@ typedef struct __attribute__((__packed__))
 	char password[PASS_MAX];
 	bool encrypted;
 } esp_wifi_config_t;
-#define CONFIGCHECK 8
+#define CONFIGCHECK 8 //change this if the above struct changes to invalidate old saved configs
 
 class ESPSerialWiFiManager {
     public:
@@ -50,11 +54,13 @@ class ESPSerialWiFiManager {
         ESPSerialWiFiManager(int eeprom_size, int eeprom_offset);
 
         uint8_t begin();
-
-        void set_init_ap(char const *ssid, char const *password);
+        uint8_t begin(String ssid, String pass);
+        uint8_t begin(String ssid);
 
         void run_menu(int timeout);
         void run_menu();
+
+        uint8_t status();
 
     private:
 
@@ -63,16 +69,16 @@ class ESPSerialWiFiManager {
         int _eeprom_size = 512;
         int _eeprom_offset = 0;
 
+        //Config
         void _write_config();
         void _read_config();
-
         void _set_config(String ssid, String pass, bool enc);
         void _save_config(String ssid, String pass, bool enc);
         void _reset_config();
 
+        //network management
         bool _wait_for_wifi(bool status);
         bool _wait_for_wifi();
-        void _disp_network_details();
         void _disconnect();
         bool _connect_from_config();
         bool _connect(String ssid, String pass);
@@ -82,6 +88,8 @@ class ESPSerialWiFiManager {
         bool _connect_wps();
         void _scan_for_networks();
 
+        //menues / etc
+        void _disp_network_details();
         int _print_menu(String * menu_list, int menu_size, int timeout);
         int _print_menu(String * menu_list, int menu_size);
         String _prompt(String prompt, char mask, int timeout);
