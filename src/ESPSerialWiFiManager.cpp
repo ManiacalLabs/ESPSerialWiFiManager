@@ -347,7 +347,7 @@ int ESPSerialWiFiManager::_prompt_int(String prompt, int timeout){
 }
 
 int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size){
-    return _print_menu(menu_list, menu_size);
+    return _print_menu(menu_list, menu_size, 0);
 }
 int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size, int timeout){
     int i, opt;
