@@ -320,7 +320,7 @@ String ESPSerialWiFiManager::_prompt(String prompt, char mask, int timeout){
             }
             else{
                 _flush_serial();
-                OL("");
+                OL("\n");
                 return String(cmd);
             }
         }
