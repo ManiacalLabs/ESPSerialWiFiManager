@@ -14,6 +14,14 @@
 #define O(t) Serial.print(t)
 #define OL(t) Serial.println(t)
 
+//Save as above but F() the strings
+//Some O/OL calls include strcat and can't use F()
+//So separate options needed
+#define OF(t) Serial.print(F(t))
+#define OFL(t) Serial.println(F(t))
+
+#define NL() Serial.println()
+
 #define CHAROPT(opt, val) bool(opt == val || (opt+32) == val) //quick checking of single char case-insensitive
 #define PROMPT_INPUT_SIZE PASS_MAX //Max WPA Password size is 64, so this is good enough
 #define WIFI_WAIT_TIMEOUT 30 //seconds to wait for wifi connect

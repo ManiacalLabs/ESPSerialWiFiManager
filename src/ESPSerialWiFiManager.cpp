@@ -49,7 +49,6 @@ void ESPSerialWiFiManager::_write_config(){
 void ESPSerialWiFiManager::_read_config(){
     if(EEPROM.read(_eeprom_offset) != CONFIGCHECK)
     {
-        OL("Bad CONFIGCHECK");
         memset(_network_config.ssid, 0, sizeof(char) * SSID_MAX);
         memset(_network_config.password, 0, sizeof(char) * PASS_MAX);
         _network_config.encrypted = false;
@@ -80,7 +79,7 @@ void ESPSerialWiFiManager::_set_config(String ssid, String pass, bool enc){
 void ESPSerialWiFiManager::_save_config(String ssid, String pass, bool enc){
     _set_config(ssid, pass, true);
     _write_config();
-    OL("Choose commit config for changes to persist reboot.\n");
+    OFL("Choose commit config for changes to persist reboot.\n");
 }
 
 
@@ -118,7 +117,7 @@ bool ESPSerialWiFiManager::_connect(String ssid, String pass){
 }
 
 bool ESPSerialWiFiManager::_connect_enc(String ssid){
-    O("Connect to "); O(ssid); OL(":");
+    OF("Connect to "); O(ssid); OFL(":");
 
     String pass = _prompt("Password", '*');
 
@@ -126,7 +125,7 @@ bool ESPSerialWiFiManager::_connect_enc(String ssid){
 }
 
 bool ESPSerialWiFiManager::_connect_manual(){
-    OL("Manual WiFi Config:");
+    OFL("Manual WiFi Config:");
     String ssid = _prompt("Enter SSID (Case Sensitive)");
     String enc = _prompt("Encrypted Network? y/n");
     String pass = "";
@@ -140,14 +139,17 @@ bool ESPSerialWiFiManager::_connect_manual(){
 
 bool ESPSerialWiFiManager::_connect_wps(){
     _disconnect();
-    OL("Push the WPS button on your access point now.");
-    _prompt("Press Enter when complete");
-    OL("Attempting WPS connection. May take some time...");
+    OFL("Push the WPS button on your access point now.");
+    String opt = _prompt("Press Enter when complete (q to abort)");
+    if(CHAROPT(opt[0], 'q')) return false;
+    OFL("Attempting WPS connection. May take some time...");
     if(WiFi.beginWPSConfig()){
         String ssid = WiFi.SSID();
         if(ssid.length() > 0){
             OL("\nSuccess! Connected to network " + ssid);
-
+            NL();
+            _disp_network_details();
+            NL();
             _save_config(ssid, WiFi.psk(), true);
             return true;
         }
@@ -163,26 +165,30 @@ void ESPSerialWiFiManager::_scan_for_networks(){
     bool inv_opt = false;
 
     while(true){
-        OL("Starting network scan...");
-        if(!inv_opt)
+
+        if(!inv_opt){
+            OFL("Starting network scan...\n");
             n = WiFi.scanNetworks();
+        }
 
         inv_opt = false;
         if(n == 0){
-            OL("\nNo Avaliable Networks!\nChoose Option Below.");
+            OFL("\nNo Avaliable Networks!\nChoose Option Below.");
         }
         else{
-            O(n); OL(" networks found:");
+            O(n); OFL(" networks found:");
+            OFL("==================");
             for(i=0; i < n; i++){
                 O(i + 1);O(": ");O(WiFi.SSID(i));
                 O(" (");O(WiFi.RSSI(i));O(")");
                 OL((WiFi.encryptionType(i) == ENC_TYPE_NONE)?"":"*");
             }
+            OFL("==================");
         }
 
-        OL("");
-        OL("s: Scan Again");
-        OL("q: Quit Network Scan");
+        NL();
+        OFL("s: Scan Again");
+        OFL("q: Quit Network Scan");
 
         opt_s  = _prompt("");
 
@@ -191,7 +197,7 @@ void ESPSerialWiFiManager::_scan_for_networks(){
         else{
             opt = opt_s.toInt();
             if(opt < 1 || opt >= n + 2){
-                OL("Invalid Menu Option!");
+                OFL("Invalid Menu Option!");
                 inv_opt = true;
             }
             else{
@@ -224,26 +230,26 @@ void ESPSerialWiFiManager::_scan_for_networks(){
 
 bool ESPSerialWiFiManager::_wait_for_wifi(bool status){
     int c = 0;
-    if(status) Serial.println("Connecting to " + WiFi.SSID());
+    if(status) OL("Connecting to " + WiFi.SSID());
     while ((WiFi.status() == WL_IDLE_STATUS || WiFi.status() == WL_DISCONNECTED) && c < WIFI_WAIT_TIMEOUT) {
         delay(500);
         if(status) Serial.print(".");
         c++;
     }
 
-    OL("");
+    NL();
     int ws = WiFi.status();
     if (ws == WL_CONNECTED) {
-        OL("Connection Sucessful");
+        OFL("Connection Sucessful");
         return true;
     }
     else if (status && ws == WL_CONNECT_FAILED){
-        OL("Failed Connecting to AP");
+        OFL("Failed Connecting to AP");
     }
     else{
-        OL("Timed Out Connecting to AP");
+        OFL("Timed Out Connecting to AP");
     }
-    OL("");
+    NL();
     return false;
 }
 
@@ -262,17 +268,19 @@ void ESPSerialWiFiManager::_disconnect(){
 }
 
 void ESPSerialWiFiManager::_disp_network_details(){
-    OL("Current Network Details:");
+    OFL("=============================");
+    OFL("Current Network Details:");
+    OFL("=============================");
     OL("SSID: " + WiFi.SSID());
 
     IPAddress ip = WiFi.localIP();
-    O("IP Address: ");
+    OF("IP Address: ");
     OL(ip);
 
     // print your MAC address:
     byte mac[6];
     WiFi.macAddress(mac);
-    O("MAC address: ");
+    OF("MAC address: ");
     Serial.print(mac[5],HEX);
     Serial.print(":");
     Serial.print(mac[4],HEX);
@@ -287,13 +295,14 @@ void ESPSerialWiFiManager::_disp_network_details(){
 
     // print your subnet mask:
     IPAddress subnet = WiFi.subnetMask();
-    O("NetMask: ");
+    OF("NetMask: ");
     OL(subnet);
 
     // print your gateway address:
     IPAddress gateway = WiFi.gatewayIP();
-    O("Gateway: ");
+    OF("Gateway: ");
     OL(gateway);
+    OFL("=============================");
 }
 
 String ESPSerialWiFiManager::_prompt(String prompt, char mask, int timeout){
@@ -303,13 +312,13 @@ String ESPSerialWiFiManager::_prompt(String prompt, char mask, int timeout){
     memset(cmd, 0, PROMPT_INPUT_SIZE);
     count = 0;
     if(timeout > 0){
-        O("\nTimeout in "); O(timeout); OL("s...");
+        NL(); OF("Timeout in "); O(timeout); OFL("s...");
     }
 
     int start = millis();
 
     O(prompt.c_str());
-    O("> ");
+    OF("> ");
 
     while(true){
         if(Serial.available() > 0){
@@ -325,7 +334,7 @@ String ESPSerialWiFiManager::_prompt(String prompt, char mask, int timeout){
             }
             else{
                 _flush_serial();
-                OL("\n");
+                NL(); NL();
                 return String(cmd);
             }
         }
@@ -345,9 +354,7 @@ int ESPSerialWiFiManager::_prompt_int(String prompt){
 int ESPSerialWiFiManager::_prompt_int(String prompt, int timeout){
     String res = _prompt(prompt, ' ', timeout);
     int res_i = res.toInt();
-    // if(res_i == 0 && res[0] != 0)
-    //     res_i = NULL;
-    //TODO: Menu System doesn't need 0, I think?
+    //NOTE: toInt() returns 0 if cannot parse, therefore 0 is not a valid input
     return res_i;
 }
 
@@ -363,7 +370,7 @@ int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size, int tim
         opt = _prompt_int("", timeout);
 
         if(timeout == 0 && (opt < 1 || opt > menu_size))
-            OL("Invalid Menu Option!");
+            OFL("Invalid Menu Option!");
         else
             return opt;
     }
@@ -384,12 +391,15 @@ void ESPSerialWiFiManager::run_menu(int timeout){
     };
 
     static int i;
-    OL("\n");
-    OL("ESP Serial WiFi Manager");
-    OL("=======================");
+    NL();
+    OFL("ESP Serial WiFi Manager");
+    OFL("=======================");
 
     while(true){
-        OL("\nMain Menu");
+        NL();
+        OFL("================");
+        OFL("MAIN MENU");
+        OFL("================");
         i = _print_menu(_main_menu, _main_menu_size, first_run ? timeout : 0);
         if(i == -1) return; //timeout ocurred, exit
         first_run = false;
@@ -407,18 +417,18 @@ void ESPSerialWiFiManager::run_menu(int timeout){
             case 4:
                 if(WiFi.status() == WL_CONNECTED){
                     _disconnect();
-                    OL("Complete");
+                    OFL("Complete");
                 }
                 else{
-                    OL("Not currently connected...");
+                    OFL("Not currently connected...");
                 }
                 _reset_config();
                 _write_config();
                 break;
             case 5:
-                OL("Commiting config to EEPROM... ");
+                OFL("Commiting config to EEPROM... ");
                 EEPROM.commit();
-                OL("Complete. Changes will now persist through reboot.");
+                OFL("Complete. Changes will now persist through reboot.");
                 break;
             case 6: //quit, nothing to do, just exit
                 return;
