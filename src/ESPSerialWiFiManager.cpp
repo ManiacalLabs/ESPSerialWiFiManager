@@ -158,13 +158,16 @@ bool ESPSerialWiFiManager::_connect_wps(){
 }
 
 void ESPSerialWiFiManager::_scan_for_networks(){
-    int i, opt;
+    int i, opt, n;
     String opt_s;
+    bool inv_opt = false;
 
     while(true){
         OL("Starting network scan...");
-        int n = WiFi.scanNetworks();
+        if(!inv_opt)
+            n = WiFi.scanNetworks();
 
+        inv_opt = false;
         if(n == 0){
             OL("\nNo Avaliable Networks!\nChoose Option Below.");
         }
@@ -187,8 +190,10 @@ void ESPSerialWiFiManager::_scan_for_networks(){
         else if(CHAROPT(opt_s[0], 's')){ continue; }
         else{
             opt = opt_s.toInt();
-            if(opt < 1 || opt >= n + 2)
+            if(opt < 1 || opt >= n + 2){
                 OL("Invalid Menu Option!");
+                inv_opt = true;
+            }
             else{
                     opt = opt - 1;
                     switch (WiFi.encryptionType(opt)) {
