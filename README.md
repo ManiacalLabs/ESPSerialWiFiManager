@@ -4,7 +4,31 @@ The [ESP8266 Arduino](https://github.com/esp8266/Arduino) package provides a gre
 
 ### Usage
 
-#### Serial Connections
+ESPSerialWiFiManager is designed to be as unobtrusive to your existing code as possible. It's up to you when the manager menu is presented and it can be displayed anywhere by simply calling the [run_menu()](#run_menuint-timeout) function. Below is the absolute simplest way to initialize and show the manager menu:
+
+``` c
+//First, include the 2 required headers
+#include <ESP8266WiFi.h> 
+#include <ESPSerialWiFiManager.h>
+
+//Create the manager object
+ESPSerialWiFiManager esp = ESPSerialWiFiManager();
+
+void setup(){
+    //Initialize the serial connection. This is required.
+    Serial.begin(115200);
+    //Complete manager init (this will init WiFi and EEPROM)
+    esp.begin();
+    //If desired at beginnging, show manager menu
+    //This will timeout after 10 seconds
+    esp.run_menu(10);
+}
+```
+
+Note that if your code uses EEPROM *in any way* you must use the optional eeprom_size and eeprom_offset parameters of the ESPSerialWiFiManger [constructor](#espserialwifimanagerint-eeprom_size-int-eeprom_offset) otherwise there will be conflicting EEPROM data.
+
+
+#### Viewing the Serial WiFi Manager
 
 You can connect to the interactive management console on the ESP8266 via a serial connection, either using an FTDI adapter or any on board serial to USB connection. On all platforms, using the Arduino Serial Monitor is always on option. Just open the monitor, set the baud rate to the rate you set in Serial.begin(). Note that entering options into the management console requires sending the return key which in the Arduino Serial Monitor requires setting line ending option in the bottom right of the monitor window. Any option other than "No line ending" will work.
 
