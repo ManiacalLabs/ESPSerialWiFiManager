@@ -54,7 +54,7 @@ To find, the actual device path, the easiest way is generally to connect the ESP
 
 Then look for a line detailing the connection of a new USB Serial device which will list the full device path.
 
-Once connected the board will not automatically reset like when using the Arduino Serial Monitor
+Once connected the board will not automatically reset like when using the Arduino Serial Monitor so you will either have to manually reset the board or enter whatever command you have set in your code to launch the manager menu.
 
 ### ESPSerialWiFiManager Class
 
