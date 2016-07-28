@@ -73,6 +73,7 @@ class ESPSerialWiFiManager {
     private:
 
         esp_wifi_config_t _network_config;
+        bool _dirty_config;
 
         int _eeprom_size = 512;
         int _eeprom_offset = 0;
@@ -83,6 +84,7 @@ class ESPSerialWiFiManager {
         void _set_config(String ssid, String pass, bool enc);
         void _save_config(String ssid, String pass, bool enc);
         void _reset_config();
+        void _commit_config();
 
         //network management
         bool _wait_for_wifi(bool status);

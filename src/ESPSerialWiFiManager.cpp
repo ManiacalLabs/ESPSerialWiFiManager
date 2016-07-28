@@ -19,6 +19,7 @@ ESPSerialWiFiManager::ESPSerialWiFiManager(int eeprom_size, int eeprom_offset)
 uint8_t ESPSerialWiFiManager::begin(){
     EEPROM.begin(_eeprom_size);
     _read_config();
+    _dirty_config = false;
 
     WiFi.mode(WIFI_STA);
     WiFi.disconnect();
@@ -54,6 +55,7 @@ void ESPSerialWiFiManager::_read_config(){
         _network_config.encrypted = false;
         _write_config();
         EEPROM.write(_eeprom_offset, CONFIGCHECK);
+        EEPROM.commit();
     }
 
     ERA(_eeprom_offset + 1, _network_config);
@@ -74,12 +76,19 @@ void ESPSerialWiFiManager::_set_config(String ssid, String pass, bool enc){
     _network_config.encrypted = enc;
 
     _network_config.config = true;
+    _dirty_config = true;
 }
 
 void ESPSerialWiFiManager::_save_config(String ssid, String pass, bool enc){
     _set_config(ssid, pass, true);
     _write_config();
     OFL("Choose commit config for changes to persist reboot.\n");
+}
+
+void ESPSerialWiFiManager::_commit_config(){
+    OFL("Commiting config to EEPROM... ");
+    EEPROM.commit();
+    OFL("Complete. Changes will now persist through reboot.");
 }
 
 
@@ -422,15 +431,17 @@ void ESPSerialWiFiManager::run_menu(int timeout){
                 else{
                     OFL("Not currently connected...");
                 }
-                _reset_config();
-                _write_config();
+                _save_config("", "", false);
                 break;
             case 5:
-                OFL("Commiting config to EEPROM... ");
-                EEPROM.commit();
-                OFL("Complete. Changes will now persist through reboot.");
+                _commit_config();
                 break;
-            case 6: //quit, nothing to do, just exit
+            case 6:
+                if(_dirty_config){
+                    OFL("Your current config is unsaved.");
+                    String opt = _prompt("Save Before Quit? y/n");
+                    if(CHAROPT(opt[0], 'y')) _commit_config();
+                }
                 return;
         }
         delay(1);
