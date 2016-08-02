@@ -52,43 +52,52 @@ typedef struct __attribute__((__packed__))
 	char ssid[SSID_MAX];
 	char password[PASS_MAX];
 	bool encrypted;
+    bool advanced;
+    IPAddress ip;
+    IPAddress gateway;
+    IPAddress subnet;
+    IPAddress dns1;
+    IPAddress dns2;
 } esp_wifi_config_t;
-#define CONFIGCHECK 8 //change this if the above struct changes to invalidate old saved configs
+#define CONFIGCHECK 12 //change this if the above struct changes to invalidate old saved configs
+
 
 class ESPSerialWiFiManager {
     public:
-        ESPSerialWiFiManager();
-        ESPSerialWiFiManager(int eeprom_size);
-        ESPSerialWiFiManager(int eeprom_size, int eeprom_offset);
+        ESPSerialWiFiManager(int eeprom_size = 512, int eeprom_offset = 0);
 
         uint8_t begin();
-        uint8_t begin(String ssid, String pass);
-        uint8_t begin(String ssid);
+        uint8_t begin(String ssid, String pass = "");
 
-        void run_menu(int timeout);
-        void run_menu();
+        void run_menu(int timeout = 0);
 
         uint8_t status();
 
     private:
 
         esp_wifi_config_t _network_config;
+        esp_wifi_config_t _temp_config;
         bool _dirty_config;
 
-        int _eeprom_size = 512;
-        int _eeprom_offset = 0;
+        int _eeprom_size;
+        int _eeprom_offset;
 
         //Config
         void _write_config();
         void _read_config();
-        void _set_config(String ssid, String pass, bool enc);
-        void _save_config(String ssid, String pass, bool enc);
+        void _set_config(String ssid, String pass, bool enc,
+                         bool advanced = false,
+                         IPAddress ip = 0U, IPAddress gateway = 0U, IPAddress subnet = 0U,
+                         IPAddress dns1 = 0U, IPAddress dns2 = 0U);
+        void _save_config(String ssid, String pass, bool enc,
+                          bool advanced = false,
+                          IPAddress ip = 0U, IPAddress gateway = 0U, IPAddress subnet = 0U,
+                          IPAddress dns1 = 0U, IPAddress dns2 = 0U);
         void _reset_config();
         void _commit_config();
 
         //network management
-        bool _wait_for_wifi(bool status);
-        bool _wait_for_wifi();
+        bool _wait_for_wifi(bool status = false);
         void _disconnect();
         bool _connect_from_config();
         bool _connect(String ssid, String pass);
@@ -97,16 +106,15 @@ class ESPSerialWiFiManager {
         bool _connect_manual();
         bool _connect_wps();
         void _scan_for_networks();
+        void _get_advanced();
 
         //menues / etc
         void _disp_network_details();
-        int _print_menu(String * menu_list, int menu_size, int timeout);
-        int _print_menu(String * menu_list, int menu_size);
-        String _prompt(String prompt, char mask, int timeout);
-        String _prompt(String prompt, char mask);
-        String _prompt(String prompt);
-        int _prompt_int(String prompt, int timeout);
-        int _prompt_int(String prompt);
+        int _print_menu(String * menu_list, int menu_size, int timeout = 0);
+        String _prompt(String prompt, char mask = ' ', int timeout = 0);
+        int _prompt_int(String prompt, int timeout = 0);
+        IPAddress _prompt_ip(String prompt, IPAddress def = 0U);
+        bool _prompt_bool(String prompt);
 };
 
 #endif ESP_SERIAL_WIFI_H

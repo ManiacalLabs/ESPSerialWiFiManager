@@ -7,10 +7,18 @@ void _flush_serial(){
     }
 }
 
-ESPSerialWiFiManager::ESPSerialWiFiManager() {}
-
-ESPSerialWiFiManager::ESPSerialWiFiManager(int eeprom_size)
-{ _eeprom_size = eeprom_size; }
+// Function below from: http://stackoverflow.com/questions/35227449/convert-ip-or-mac-address-from-string-to-byte-array-arduino-or-c
+void parseBytes(String val, char sep, byte* bytes, int maxBytes, int base) {
+    const char * str = val.c_str();
+    for (int i = 0; i < maxBytes; i++) {
+        bytes[i] = strtoul(str, NULL, base);  // Convert byte
+        str = strchr(str, sep);               // Find next separator
+        if (str == NULL || *str == '\0') {
+            break;                            // No more separators, exit
+        }
+        str++;                                // Point to next character after separator
+    }
+}
 
 ESPSerialWiFiManager::ESPSerialWiFiManager(int eeprom_size, int eeprom_offset)
 { _eeprom_size = eeprom_size; _eeprom_offset = eeprom_offset; }
@@ -37,10 +45,6 @@ uint8_t ESPSerialWiFiManager::begin(String ssid, String pass){
     return begin();
 }
 
-uint8_t ESPSerialWiFiManager::begin(String ssid){
-    return begin(ssid, "");
-}
-
 uint8_t ESPSerialWiFiManager::status(){ return WiFi.status(); }
 
 void ESPSerialWiFiManager::_write_config(){
@@ -62,25 +66,40 @@ void ESPSerialWiFiManager::_read_config(){
 }
 
 void ESPSerialWiFiManager::_reset_config(){
-    memset(_network_config.ssid, 0, sizeof(char) * SSID_MAX);
-    memset(_network_config.password, 0, sizeof(char) * PASS_MAX);
+    memset(&_network_config, 0, sizeof(esp_wifi_config_t));
     _network_config.encrypted = false;
     _network_config.config = false;
+    _network_config.advanced = false;
 }
 
-void ESPSerialWiFiManager::_set_config(String ssid, String pass, bool enc){
+void ESPSerialWiFiManager::_set_config(String ssid, String pass, bool enc,
+                 bool advanced,
+                 IPAddress ip, IPAddress gateway, IPAddress subnet,
+                 IPAddress dns1, IPAddress dns2){
     _reset_config();
 
     memcpy(_network_config.ssid, ssid.c_str(), sizeof(char) * ssid.length());
     memcpy(_network_config.password, pass.c_str(), sizeof(char) * pass.length());
     _network_config.encrypted = enc;
 
+    if(advanced){
+        _network_config.advanced = advanced;
+        _network_config.ip = ip;
+        _network_config.gateway = gateway;
+        _network_config.subnet = subnet;
+        _network_config.dns1 = dns1;
+        _network_config.dns2 = dns2;
+    }
+
     _network_config.config = true;
     _dirty_config = true;
 }
 
-void ESPSerialWiFiManager::_save_config(String ssid, String pass, bool enc){
-    _set_config(ssid, pass, true);
+void ESPSerialWiFiManager::_save_config(String ssid, String pass, bool enc,
+                 bool advanced,
+                 IPAddress ip, IPAddress gateway, IPAddress subnet,
+                 IPAddress dns1, IPAddress dns2){
+    _set_config(ssid, pass, enc, advanced, ip, gateway, subnet, dns1, dns2);
     _write_config();
     OFL("Choose commit config for changes to persist reboot.\n");
 }
@@ -94,6 +113,16 @@ void ESPSerialWiFiManager::_commit_config(){
 
 bool ESPSerialWiFiManager::_connect_from_config(){
     _disconnect();
+    if(_network_config.advanced){
+        WiFi.config(_temp_config.ip,
+                    _temp_config.gateway,
+                    _temp_config.subnet,
+                    _temp_config.dns1,
+                    _temp_config.dns2);
+    }
+    else{
+        WiFi.config(0U, 0U, 0U); //Clear out manual config
+    }
     if(_network_config.encrypted){
         WiFi.begin(_network_config.ssid, _network_config.password);
     }
@@ -107,17 +136,33 @@ bool ESPSerialWiFiManager::_connect_from_config(){
 }
 
 bool ESPSerialWiFiManager::_connect_noenc(String ssid){
+    _get_advanced();
     return _connect(ssid, "");
 }
 
 bool ESPSerialWiFiManager::_connect(String ssid, String pass){
     _disconnect();
+    if(_temp_config.advanced){
+        WiFi.config(_temp_config.ip,
+                    _temp_config.gateway,
+                    _temp_config.subnet,
+                    _temp_config.dns1,
+                    _temp_config.dns2);
+    }
+    else{
+        WiFi.config(0U, 0U, 0U); //Clear out manual config
+    }
     if(pass.length() > 0)
         WiFi.begin(ssid.c_str(), pass.c_str());
     else
         WiFi.begin(ssid.c_str());
     if(_wait_for_wifi(true)){
-        _save_config(ssid, pass, pass.length() > 0);
+        _save_config(ssid, pass, pass.length() > 0,
+                    _temp_config.ip,
+                    _temp_config.gateway,
+                    _temp_config.subnet,
+                    _temp_config.dns1,
+                    _temp_config.dns2);
         return true;
     }
     else{
@@ -130,17 +175,21 @@ bool ESPSerialWiFiManager::_connect_enc(String ssid){
 
     String pass = _prompt("Password", '*');
 
+    _get_advanced();
+
     return _connect(ssid, pass);
 }
 
 bool ESPSerialWiFiManager::_connect_manual(){
     OFL("Manual WiFi Config:");
-    String ssid = _prompt("Enter SSID (Case Sensitive)");
-    String enc = _prompt("Encrypted Network? y/n");
+    String ssid = _prompt(F("Enter SSID (Case Sensitive)"));
+    String opt = _prompt(F("Encrypted Network? y/n"));
     String pass = "";
-    if(CHAROPT(enc[0],'y')){
+    if(CHAROPT(opt[0],'y')){
         pass = _prompt("Password", '*');
     }
+
+    _get_advanced();
 
     _disconnect();
     return _connect(ssid, pass);
@@ -262,10 +311,6 @@ bool ESPSerialWiFiManager::_wait_for_wifi(bool status){
     return false;
 }
 
-bool ESPSerialWiFiManager::_wait_for_wifi(){
-    return _wait_for_wifi(false);
-}
-
 void ESPSerialWiFiManager::_disconnect(){
     if(WiFi.status() == WL_CONNECTED){
         OL("Disconnecting from " + WiFi.SSID() + "...");
@@ -282,9 +327,8 @@ void ESPSerialWiFiManager::_disp_network_details(){
     OFL("=============================");
     OL("SSID: " + WiFi.SSID());
 
-    IPAddress ip = WiFi.localIP();
     OF("IP Address: ");
-    OL(ip);
+    OL(WiFi.localIP());
 
     // print your MAC address:
     byte mac[6];
@@ -302,16 +346,36 @@ void ESPSerialWiFiManager::_disp_network_details(){
     Serial.print(":");
     Serial.println(mac[0],HEX);
 
-    // print your subnet mask:
-    IPAddress subnet = WiFi.subnetMask();
-    OF("NetMask: ");
-    OL(subnet);
+    OF("Subnet Mask: ");
+    OL(WiFi.subnetMask());
 
-    // print your gateway address:
-    IPAddress gateway = WiFi.gatewayIP();
     OF("Gateway: ");
-    OL(gateway);
+    OL(WiFi.gatewayIP());
+
+    OF("DNS 1: ");
+    OL(WiFi.dnsIP(0));
+
+    OF("DNS 2: ");
+    OL(WiFi.dnsIP(1));
+
     OFL("=============================");
+}
+
+void ESPSerialWiFiManager::_get_advanced(){
+    memset(&_temp_config, 0, sizeof(esp_wifi_config_t));
+    if(_prompt_bool(F("Advanced Config?"))){
+        _temp_config.ip = _prompt_ip(F("Static IP"));
+        _temp_config.gateway = _prompt_ip(F("Gateway"), IPAddress(_temp_config.ip[0], _temp_config.ip[1], _temp_config.ip[2], 1));
+        _temp_config.subnet = _prompt_ip(F("Subnet Mask"), IPAddress(255, 255, 255, 0));
+
+        _temp_config.dns1 = 0U;
+        _temp_config.dns2 = 0U;
+        if(_prompt_bool(F("Configure DNS?"))){
+            _temp_config.dns1 = _prompt_ip(F("DNS 1"));
+            _temp_config.dns2 = _prompt_ip(F("DNS 2"));
+        }
+        _temp_config.advanced = true;
+    }
 }
 
 String ESPSerialWiFiManager::_prompt(String prompt, char mask, int timeout){
@@ -354,12 +418,6 @@ String ESPSerialWiFiManager::_prompt(String prompt, char mask, int timeout){
     }
 }
 
-String ESPSerialWiFiManager::_prompt(String prompt, char mask) { return _prompt(prompt, mask, 0); }
-String ESPSerialWiFiManager::_prompt(String prompt) { return _prompt(prompt, ' ', 0); }
-
-int ESPSerialWiFiManager::_prompt_int(String prompt){
-    return _prompt_int(prompt, 0);
-}
 int ESPSerialWiFiManager::_prompt_int(String prompt, int timeout){
     String res = _prompt(prompt, ' ', timeout);
     int res_i = res.toInt();
@@ -367,9 +425,30 @@ int ESPSerialWiFiManager::_prompt_int(String prompt, int timeout){
     return res_i;
 }
 
-int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size){
-    return _print_menu(menu_list, menu_size, 0);
+IPAddress ESPSerialWiFiManager::_prompt_ip(String prompt, IPAddress def){
+    while(true){
+        String p(prompt);
+        if(def != 0){
+            p = p + " (Default: " + def.toString() + ")";
+        }
+        String ip_str = _prompt(p, ' ', 0);
+        if(ip_str.length() == 0){
+            return def;
+        }
+        IPAddress ip;
+        if(ip.fromString(ip_str))
+            return ip;
+        else{
+            OFL("Invalid IP entered! Please try again.\n");
+        }
+    }
 }
+
+bool ESPSerialWiFiManager::_prompt_bool(String prompt){
+    String opt = _prompt(prompt + " y/n");
+    return CHAROPT(opt[0], 'y');
+}
+
 int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size, int timeout){
     int i, opt;
     while(true){
@@ -385,13 +464,12 @@ int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size, int tim
     }
 }
 
-void ESPSerialWiFiManager::run_menu(){ return run_menu(0); }
 void ESPSerialWiFiManager::run_menu(int timeout){
     bool first_run = true;
     static const uint8_t _main_menu_size = 6;
     static String _main_menu[_main_menu_size] = {
         F("Scan"),
-        F("Manual Connect"),
+        F("Enter SSID"),
         F("WPS Connect"),
         F("Disconnect"),
         F("Commit Config"),
