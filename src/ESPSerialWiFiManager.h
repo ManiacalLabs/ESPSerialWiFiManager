@@ -59,7 +59,7 @@ typedef struct __attribute__((__packed__))
     IPAddress dns1;
     IPAddress dns2;
 } esp_wifi_config_t;
-#define CONFIGCHECK 12 //change this if the above struct changes to invalidate old saved configs
+#define CONFIGCHECK 14 //change this if the above struct changes to invalidate old saved configs
 
 
 class ESPSerialWiFiManager {

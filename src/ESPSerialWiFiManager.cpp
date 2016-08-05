@@ -54,9 +54,7 @@ void ESPSerialWiFiManager::_write_config(){
 void ESPSerialWiFiManager::_read_config(){
     if(EEPROM.read(_eeprom_offset) != CONFIGCHECK)
     {
-        memset(_network_config.ssid, 0, sizeof(char) * SSID_MAX);
-        memset(_network_config.password, 0, sizeof(char) * PASS_MAX);
-        _network_config.encrypted = false;
+        _reset_config();
         _write_config();
         EEPROM.write(_eeprom_offset, CONFIGCHECK);
         EEPROM.commit();
@@ -70,6 +68,7 @@ void ESPSerialWiFiManager::_reset_config(){
     _network_config.encrypted = false;
     _network_config.config = false;
     _network_config.advanced = false;
+    _dirty_config = true;
 }
 
 void ESPSerialWiFiManager::_set_config(String ssid, String pass, bool enc,
@@ -101,7 +100,8 @@ void ESPSerialWiFiManager::_save_config(String ssid, String pass, bool enc,
                  IPAddress dns1, IPAddress dns2){
     _set_config(ssid, pass, enc, advanced, ip, gateway, subnet, dns1, dns2);
     _write_config();
-    OFL("Choose commit config for changes to persist reboot.\n");
+    _read_config();
+    OFL("Choose Commit Config for changes to persist reboot.\n");
 }
 
 void ESPSerialWiFiManager::_commit_config(){
@@ -114,11 +114,11 @@ void ESPSerialWiFiManager::_commit_config(){
 bool ESPSerialWiFiManager::_connect_from_config(){
     _disconnect();
     if(_network_config.advanced){
-        WiFi.config(_temp_config.ip,
-                    _temp_config.gateway,
-                    _temp_config.subnet,
-                    _temp_config.dns1,
-                    _temp_config.dns2);
+        WiFi.config(_network_config.ip,
+                    _network_config.gateway,
+                    _network_config.subnet,
+                    _network_config.dns1,
+                    _network_config.dns2);
     }
     else{
         WiFi.config(0U, 0U, 0U); //Clear out manual config
@@ -158,6 +158,7 @@ bool ESPSerialWiFiManager::_connect(String ssid, String pass){
         WiFi.begin(ssid.c_str());
     if(_wait_for_wifi(true)){
         _save_config(ssid, pass, pass.length() > 0,
+                    _temp_config.advanced,
                     _temp_config.ip,
                     _temp_config.gateway,
                     _temp_config.subnet,
@@ -325,39 +326,43 @@ void ESPSerialWiFiManager::_disp_network_details(){
     OFL("=============================");
     OFL("Current Network Details:");
     OFL("=============================");
-    OL("SSID: " + WiFi.SSID());
+    if(status() != WL_CONNECTED){
+        OFL("\nNot currently connected!\n");
+    }
+    else{
+        OL("SSID: " + WiFi.SSID());
 
-    OF("IP Address: ");
-    OL(WiFi.localIP());
+        OF("IP Address: ");
+        OL(WiFi.localIP());
 
-    // print your MAC address:
-    byte mac[6];
-    WiFi.macAddress(mac);
-    OF("MAC address: ");
-    Serial.print(mac[5],HEX);
-    Serial.print(":");
-    Serial.print(mac[4],HEX);
-    Serial.print(":");
-    Serial.print(mac[3],HEX);
-    Serial.print(":");
-    Serial.print(mac[2],HEX);
-    Serial.print(":");
-    Serial.print(mac[1],HEX);
-    Serial.print(":");
-    Serial.println(mac[0],HEX);
+        // print your MAC address:
+        byte mac[6];
+        WiFi.macAddress(mac);
+        OF("MAC address: ");
+        Serial.print(mac[5],HEX);
+        Serial.print(":");
+        Serial.print(mac[4],HEX);
+        Serial.print(":");
+        Serial.print(mac[3],HEX);
+        Serial.print(":");
+        Serial.print(mac[2],HEX);
+        Serial.print(":");
+        Serial.print(mac[1],HEX);
+        Serial.print(":");
+        Serial.println(mac[0],HEX);
 
-    OF("Subnet Mask: ");
-    OL(WiFi.subnetMask());
+        OF("Subnet Mask: ");
+        OL(WiFi.subnetMask());
 
-    OF("Gateway: ");
-    OL(WiFi.gatewayIP());
+        OF("Gateway: ");
+        OL(WiFi.gatewayIP());
 
-    OF("DNS 1: ");
-    OL(WiFi.dnsIP(0));
+        OF("DNS 1: ");
+        OL(WiFi.dnsIP(0));
 
-    OF("DNS 2: ");
-    OL(WiFi.dnsIP(1));
-
+        OF("DNS 2: ");
+        OL(WiFi.dnsIP(1));
+    }
     OFL("=============================");
 }
 
@@ -466,13 +471,14 @@ int ESPSerialWiFiManager::_print_menu(String * menu_list, int menu_size, int tim
 
 void ESPSerialWiFiManager::run_menu(int timeout){
     bool first_run = true;
-    static const uint8_t _main_menu_size = 6;
+    static const uint8_t _main_menu_size = 7;
     static String _main_menu[_main_menu_size] = {
         F("Scan"),
         F("Enter SSID"),
         F("WPS Connect"),
         F("Disconnect"),
         F("Commit Config"),
+        F("Display Network Details"),
         F("Quit")
         //"Disconnect"
     };
@@ -505,16 +511,21 @@ void ESPSerialWiFiManager::run_menu(int timeout){
                 if(WiFi.status() == WL_CONNECTED){
                     _disconnect();
                     OFL("Complete");
+                    _reset_config();
+                    _write_config();
+                    OFL("Choose Commit Config to prevent reconnect on reboot.");
                 }
                 else{
                     OFL("Not currently connected...");
                 }
-                _save_config("", "", false);
                 break;
             case 5:
                 _commit_config();
                 break;
             case 6:
+                _disp_network_details();
+                break;
+            case 7:
                 if(_dirty_config){
                     OFL("Your current config is unsaved.");
                     String opt = _prompt("Save Before Quit? y/n");
