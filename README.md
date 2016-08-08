@@ -1,6 +1,60 @@
 ## ESP8266 WiFi Serial Manager
 
-The [ESP8266 Arduino](https://github.com/esp8266/Arduino) package provides a great and familiar to use ecosystem for developing code on the chip. However, most examples for WiFi network connection and management involve building and uploading new code every time you want to change the network settings. That's just more than should be required if you want to simply connect an existing and complete project to a new network. There are some [examples](https://github.com/tzapu/WiFiManager) of ESP8266 WiFi managers already but all seem to go with the mor complicated process of entering AP mode, connecting to the ESP8266 with another computer, loading a webpage and configuring via that page. This library, however, seeks to simplify that with providing an easy to use interactive serial console for all your WiFi network management needs. It supports open, WEP, WPA, and even WPS connections as well as can commit the configuration to EEPROM to be automatically connected on reboot.
+The [ESP8266 Arduino](https://github.com/esp8266/Arduino) package provides a great and familiar to use ecosystem for developing code on the chip. However, most examples for WiFi network connection and management involve building and uploading new code every time you want to change the network settings. That's just more than should be required if you want to simply connect an existing and complete project to a new network. There are some [examples](https://github.com/tzapu/WiFiManager) of ESP8266 WiFi managers already but all seem to go with the more complicated process of entering AP mode, connecting to the ESP8266 with another computer, loading a webpage and configuring via that page. This library, however, seeks to simplify that with providing an easy to use interactive serial console for all your WiFi network management needs. It supports open, WEP, WPA, and even WPS connections as well as can commit the configuration to EEPROM to be automatically connected on reboot.
+
+```
+ESP Serial WiFi Manager
+=======================
+
+================
+MAIN MENU
+================
+1: Scan
+2: Enter SSID
+3: WPS Connect
+4: Disconnect
+5: Commit Config
+6: Display Network Details
+7: Quit
+
+Timeout in 10s...
+> 1
+
+Starting network scan...
+
+3 networks found:
+==================
+1: NSA_VAN_7 (-86)*
+2: FREE_WIFI (-77)*
+3: Linksys8021 (-80)*
+==================
+
+s: Scan Again
+q: Quit Network Scan
+> 3
+
+Connect to Linksys8021:
+Password> **********
+
+Advanced Config? y/n> n
+
+Connecting to Linksys8021
+...........
+Connection Sucessful
+Choose Commit Config for changes to persist reboot.
+
+=============================
+Current Network Details:
+=============================
+SSID: Linksys8021
+IP Address: 10.0.1.111
+MAC address: 72:73:0:7F:CF:5C
+Subnet Mask: 255.255.255.0
+Gateway: 10.0.1.1
+DNS 1: 10.0.1.1
+DNS 2: 0.0.0.0
+=============================
+```
 
 ### Usage
 
@@ -8,7 +62,7 @@ ESPSerialWiFiManager is designed to be as unobtrusive to your existing code as p
 
 ``` c
 //First, include the 2 required headers
-#include <ESP8266WiFi.h> 
+#include <ESP8266WiFi.h>
 #include <ESPSerialWiFiManager.h>
 
 //Create the manager object
