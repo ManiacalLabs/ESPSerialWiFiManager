@@ -107,6 +107,7 @@ void ESPSerialWiFiManager::_save_config(String ssid, String pass, bool enc,
 void ESPSerialWiFiManager::_commit_config(){
     OFL("Commiting config to EEPROM... ");
     EEPROM.commit();
+    _dirty_config = false;
     OFL("Complete. Changes will now persist through reboot.");
 }
 
