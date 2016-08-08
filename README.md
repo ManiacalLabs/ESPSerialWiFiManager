@@ -56,6 +56,11 @@ DNS 2: 0.0.0.0
 =============================
 ```
 
+### Installation
+
+Go to the [Release](https://github.com/ManiacalLabs/ESPSerialWiFiManager/releases) page and download the latest release source zip.
+Once downloaded, follow the [Arduino library Zip installation guide](https://www.arduino.cc/en/Guide/Libraries#toc4)
+
 ### Usage
 
 ESPSerialWiFiManager is designed to be as unobtrusive to your existing code as possible. It's up to you when the manager menu is presented and it can be displayed anywhere by simply calling the [run_menu()](#run_menuint-timeout) function. Below is the absolute simplest way to initialize and show the manager menu:
