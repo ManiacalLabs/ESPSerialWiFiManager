@@ -4,9 +4,6 @@
 #include <ESP8266WiFi.h>
 #include <EEPROM.h>
 
-// #define ESWM_CONNECTED 0
-// #define ESWM_NOCONFIG 1
-
 #define SSID_MAX 32
 #define PASS_MAX 64
 
