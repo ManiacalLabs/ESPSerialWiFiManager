@@ -135,3 +135,7 @@ The optional parameters are useful for providing a default that can then be chan
 Launches the interactive serial console. This can be called anywhere in the code. For example, call at the end of setup() with a timeout to provide a one-time option to configure the WiFi on boot. Or call it inside loop() when a button is pressed. See the [examples](https://github.com/ManiacalLabs/ESPSerialWiFiManager/tree/master/examples) for more.
 
 - **timeout**: (optional) If provided, the interactive console will timeout after this many seconds and return control to the main program.
+
+#### status()
+
+Simply a wrapper around WiFi.status() for convenience.
